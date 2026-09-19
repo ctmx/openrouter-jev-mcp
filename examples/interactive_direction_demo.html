@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jev Direction Guard: Anti-Rabbit-Hole Supervisor Prototype</title>
+  <style>
+    :root {
+      --bg: #0f172a;
+      --card-bg: #1e293b;
+      --border: #334155;
+      --text: #f8fafc;
+      --text-muted: #94a3b8;
+      --accent: #38bdf8;
+      --green: #22c55e;
+      --amber: #f59e0b;
+      --red: #ef4444;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      line-height: 1.5;
+      padding: 24px;
+      max-width: 1000px;
+      margin: 0 auto;
+    }
+
+    header {
+      margin-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+      padding-bottom: 16px;
+    }
+    h1 { font-size: 1.6rem; color: var(--accent); margin-bottom: 8px; }
+    .subtitle { color: var(--text-muted); font-size: 0.95rem; }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 20px;
+    }
+    @media (max-width: 768px) {
+      .grid { grid-template-columns: 1fr; }
+    }
+
+    .card {
+      background: var(--card-bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 20px;
+    }
+    h2 { font-size: 1.15rem; margin-bottom: 14px; display: flex; align-items: center; justify-content: space-between; }
+
+    /* Decision Display */
+    .decision-banner {
+      padding: 16px;
+      border-radius: 8px;
+      text-align: center;
+      font-weight: 700;
+      font-size: 1.35rem;
+      letter-spacing: 0.05em;
+      margin-bottom: 16px;
+    }
+    .decision-CONTINUE { background: rgba(34, 197, 94, 0.15); border: 1px solid var(--green); color: var(--green); }
+    .decision-BOUNDED_PROBE { background: rgba(245, 158, 11, 0.15); border: 1px solid var(--amber); color: var(--amber); }
+    .decision-RETURN_TO_MAIN { background: rgba(239, 68, 68, 0.15); border: 1px solid var(--red); color: var(--red); }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 10px;
+      padding-bottom: 8px;
+      border-bottom: 1px dashed var(--border);
+    }
+    .stat-label { color: var(--text-muted); }
+    .stat-val { font-weight: 600; font-family: monospace; }
+
+    /* Sliders / Controls */
+    .slider-group {
+      margin-bottom: 16px;
+    }
+    .slider-header {
+      display: flex;
+      justify-content: space-between;
+      margin-bottom: 6px;
+      font-size: 0.9rem;
+    }
+    .slider-title { font-weight: 500; }
+    .slider-val { font-family: monospace; color: var(--accent); }
+    input[type="range"] {
+      width: 100%;
+      accent-color: var(--accent);
+    }
+    .slider-desc {
+      font-size: 0.78rem;
+      color: var(--text-muted);
+      margin-top: 2px;
+    }
+
+    /* Tabs */
+    .tab-bar {
+      display: flex;
+      gap: 8px;
+      margin-bottom: 16px;
+      overflow-x: auto;
+    }
+    .tab-btn {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 8px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      white-space: nowrap;
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #0f172a;
+      font-weight: 600;
+      border-color: var(--accent);
+    }
+
+    .scenario-box {
+      background: #0f172a;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 14px;
+      margin-bottom: 16px;
+      font-size: 0.88rem;
+    }
+    .scenario-title { font-weight: 600; color: var(--accent); margin-bottom: 6px; }
+
+    .btn-apply {
+      background: var(--accent);
+      color: #0f172a;
+      border: none;
+      font-weight: 600;
+      padding: 8px 16px;
+      border-radius: 6px;
+      cursor: pointer;
+      width: 100%;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Jev Direction Guard: Anti-Rabbit-Hole Supervisor</h1>
+    <p class="subtitle">
+      <strong>Design Question:</strong> Can decomposing tangent supervision into 5 narrow Jev signals (relevance, blocking dependency, evidence grounding, circularity, stopping bounds) protect coding agents from unbounded rabbit holes while preserving necessary investigative freedom?
+    </p>
+  </header>
+
+  <!-- Guided Scenarios Bar -->
+  <div class="card" style="margin-bottom: 20px;">
+    <h2>Guided Walkthroughs (Select a Scenario)</h2>
+    <div class="tab-bar" id="tabBar">
+      <button class="tab-btn active" onclick="loadScenario(0)">1. Disconnected Rabbit Hole</button>
+      <button class="tab-btn" onclick="loadScenario(1)">2. Grounded Dependency</button>
+      <button class="tab-btn" onclick="loadScenario(2)">3. Speculative Bounded Probe</button>
+      <button class="tab-btn" onclick="loadScenario(3)">4. Circular Retread</button>
+    </div>
+    <div class="scenario-box" id="scenarioBox">
+      <!-- Injected by JS -->
+    </div>
+    <button class="btn-apply" onclick="applyScenario()">Load Scenario Probabilities</button>
+  </div>
+
+  <div class="grid">
+    <!-- Left Column: Current Evaluation -->
+    <div class="card">
+      <h2>Supervisor Decision</h2>
+      <div id="decisionBanner" class="decision-banner decision-CONTINUE">CONTINUE</div>
+      
+      <div class="stat-row">
+        <span class="stat-label">Decision Confidence</span>
+        <span class="stat-val" id="dispConf">89.5%</span>
+      </div>
+      <div class="stat-row">
+        <span class="stat-label">Recommended Action</span>
+        <span class="stat-val" id="dispAction" style="font-family: inherit; font-size: 0.88rem; text-align: right; max-width: 60%;">
+          Proceed with bounded probe.
+        </span>
+      </div>
+
+      <div style="margin-top: 14px;">
+        <span class="stat-label"><strong>Policy Rationale:</strong></span>
+        <p id="dispRationale" style="margin-top: 4px; font-size: 0.88rem; color: #cbd5e1; background: #0f172a; padding: 10px; border-radius: 6px; border: 1px solid var(--border);">
+          Investigation is well-grounded...
+        </p>
+      </div>
+    </div>
+
+    <!-- Right Column: The 5 Narrow Jev Signals (Sliders) -->
+    <div class="card">
+      <h2>Free-Play Jev Signal Inputs</h2>
+
+      <!-- Q1 -->
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-title">1. Direct Relevance (Noul)</span>
+          <span class="slider-val" id="valRelevance">0.85</span>
+        </div>
+        <input type="range" id="inputRelevance" min="0" max="1" step="0.01" value="0.85" oninput="onSliderChange()">
+        <div class="slider-desc">Does this investigation directly address a stated requirement?</div>
+      </div>
+
+      <!-- Q2 -->
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-title">2. Blocking Dependency (Noul)</span>
+          <span class="slider-val" id="valBlocking">0.91</span>
+        </div>
+        <input type="range" id="inputBlocking" min="0" max="1" step="0.01" value="0.91" oninput="onSliderChange()">
+        <div class="slider-desc">Does evidence show this subsystem blocks the primary objective?</div>
+      </div>
+
+      <!-- Q3 -->
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-title">3. Grounded Evidence (Score)</span>
+          <span class="slider-val" id="valEvidence">1.85</span>
+        </div>
+        <input type="range" id="inputEvidence" min="0" max="2" step="0.05" value="1.85" oninput="onSliderChange()">
+        <div class="slider-desc">0 = Speculative (guess), 1 = Weak, 2 = Grounded (logs/traces)</div>
+      </div>
+
+      <!-- Q4 -->
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-title">4. Circular Reasoning (Noul)</span>
+          <span class="slider-val" id="valCircular">0.01</span>
+        </div>
+        <input type="range" id="inputCircular" min="0" max="1" step="0.01" value="0.01" oninput="onSliderChange()">
+        <div class="slider-desc">Does this repeat an already settled question without new data?</div>
+      </div>
+
+      <!-- Q5 -->
+      <div class="slider-group">
+        <div class="slider-header">
+          <span class="slider-title">5. Bounded Stopping Check (Noul)</span>
+          <span class="slider-val" id="valBounded">0.88</span>
+        </div>
+        <input type="range" id="inputBounded" min="0" max="1" step="0.01" value="0.88" oninput="onSliderChange()">
+        <div class="slider-desc">Is there a concrete observation that would definitively end this investigation?</div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    /* =========================================================================
+       PURE REDUCER MODULE (Liftable directly into production codebase)
+       ========================================================================= */
+    function evaluateDirectionSignals(s) {
+      // Rule 1: Circular reasoning veto
+      if (s.circular_reasoning >= 0.65) {
+        return {
+          decision: "RETURN_TO_MAIN",
+          confidence: s.circular_reasoning,
+          rationale: "Retreads an already settled question without introducing new contradictory evidence.",
+          action: "Return immediately to the main task. Do not re-investigate settled decisions."
+        };
+      }
+
+      // Rule 2: Disconnected from objective
+      if (s.direct_relevance < 0.30 && s.blocking_dependency < 0.30) {
+        const conf = 1.0 - Math.max(s.direct_relevance, s.blocking_dependency);
+        return {
+          decision: "RETURN_TO_MAIN",
+          confidence: conf,
+          rationale: "No demonstrable connection to the primary objective and no evidence of a blocking dependency.",
+          action: "Abandon detour. Refocus on direct symptoms of the main objective."
+        };
+      }
+
+      // Rule 3: Ungrounded speculation with no bounded stop
+      if (s.grounded_evidence < 0.70 && s.bounded_stopping_condition < 0.40) {
+        return {
+          decision: "RETURN_TO_MAIN",
+          confidence: 0.85,
+          rationale: "Speculative inquiry with no observed traces and no concrete stopping observation.",
+          action: "Do not pursue open-ended speculation. Seek reproducible evidence first."
+        };
+      }
+
+      // Rule 4: Clear Green Light
+      const isRelevantOrBlocking = (s.direct_relevance >= 0.65 || s.blocking_dependency >= 0.65);
+      if (isRelevantOrBlocking && s.grounded_evidence >= 1.20 && s.bounded_stopping_condition >= 0.50) {
+        const conf = Math.min(0.95, (Math.max(s.direct_relevance, s.blocking_dependency) + s.bounded_stopping_condition) / 2.0);
+        return {
+          decision: "CONTINUE",
+          confidence: conf,
+          rationale: "Well-grounded, directly relevant or blocking, with a clear bounded completion condition.",
+          action: "Proceed with the investigation towards the concrete stopping condition."
+        };
+      }
+
+      // Rule 5: Preserve freedom with a 1-step bounded probe
+      return {
+        decision: "BOUNDED_PROBE",
+        confidence: 0.75,
+        rationale: "Potential relevance or plausible theory, but unproven. Preserves exploratory freedom.",
+        action: "Execute exactly ONE bounded inspection (read 1 file or run 1 probe). If inconclusive, return to main task."
+      };
+    }
+
+    /* =========================================================================
+       PAGE INTERACTION & STATE WIRING
+       ========================================================================= */
+    const scenarios = [
+      {
+        title: "Scenario 1: Disconnected Rabbit Hole",
+        task: "Fix a login timeout on the customer portal.",
+        detour: "Investigate whether retries can duplicate a credit card payment transaction.",
+        evidence: "504 Gateway timeout on POST /login. No payment references in call stack.",
+        signals: { direct_relevance: 0.08, blocking_dependency: 0.05, grounded_evidence: 0.15, circular_reasoning: 0.02, bounded_stopping_condition: 0.25 }
+      },
+      {
+        title: "Scenario 2: Grounded Blocking Dependency",
+        task: "Fix a login timeout on the customer portal.",
+        detour: "Investigate Redis connection pool exhaustion during user token lookup.",
+        evidence: "Redis Timeout waiting for pool (5000ms) observed in login error logs.",
+        signals: { direct_relevance: 0.85, blocking_dependency: 0.91, grounded_evidence: 1.85, circular_reasoning: 0.01, bounded_stopping_condition: 0.88 }
+      },
+      {
+        title: "Scenario 3: Speculative Hypothesis with Bounded 1-Step Probe",
+        task: "Fix a login timeout on the customer portal.",
+        detour: "Check if NTP clock drift across auth nodes causes immediate JWT expiration.",
+        evidence: "No NTP error logs, but intermittent failures occur across 3 hosts. One check: `timedatectl`.",
+        signals: { direct_relevance: 0.45, blocking_dependency: 0.60, grounded_evidence: 0.55, circular_reasoning: 0.05, bounded_stopping_condition: 0.82 }
+      },
+      {
+        title: "Scenario 4: Circular Retread",
+        task: "Fix a login timeout on the customer portal.",
+        detour: "Inspect ingress proxy timeout configurations again.",
+        evidence: "Intermittent timeouts continue.",
+        settled: "Ingress proxy configs were audited and verified correct in Step 2.",
+        signals: { direct_relevance: 0.20, blocking_dependency: 0.10, grounded_evidence: 0.40, circular_reasoning: 0.92, bounded_stopping_condition: 0.40 }
+      }
+    ];
+
+    let currentScenarioIdx = 0;
+
+    function loadScenario(idx) {
+      currentScenarioIdx = idx;
+      document.querySelectorAll(".tab-btn").forEach((b, i) => b.classList.toggle("active", i === idx));
+      const s = scenarios[idx];
+      document.getElementById("scenarioBox").innerHTML = `
+        <div class="scenario-title">${s.title}</div>
+        <div><strong>Task:</strong> ${s.task}</div>
+        <div><strong>Proposed Detour:</strong> ${s.detour}</div>
+        <div><strong>Evidence:</strong> ${s.evidence}</div>
+        ${s.settled ? `<div><strong>Settled:</strong> ${s.settled}</div>` : ""}
+      `;
+    }
+
+    function applyScenario() {
+      const sigs = scenarios[currentScenarioIdx].signals;
+      document.getElementById("inputRelevance").value = sigs.direct_relevance;
+      document.getElementById("inputBlocking").value = sigs.blocking_dependency;
+      document.getElementById("inputEvidence").value = sigs.grounded_evidence;
+      document.getElementById("inputCircular").value = sigs.circular_reasoning;
+      document.getElementById("inputBounded").value = sigs.bounded_stopping_condition;
+      updateFromInputs();
+    }
+
+    function updateFromInputs() {
+      const s = {
+        direct_relevance: parseFloat(document.getElementById("inputRelevance").value),
+        blocking_dependency: parseFloat(document.getElementById("inputBlocking").value),
+        grounded_evidence: parseFloat(document.getElementById("inputEvidence").value),
+        circular_reasoning: parseFloat(document.getElementById("inputCircular").value),
+        bounded_stopping_condition: parseFloat(document.getElementById("inputBounded").value)
+      };
+
+      document.getElementById("valRelevance").textContent = s.direct_relevance.toFixed(2);
+      document.getElementById("valBlocking").textContent = s.blocking_dependency.toFixed(2);
+      document.getElementById("valEvidence").textContent = s.grounded_evidence.toFixed(2);
+      document.getElementById("valCircular").textContent = s.circular_reasoning.toFixed(2);
+      document.getElementById("valBounded").textContent = s.bounded_stopping_condition.toFixed(2);
+
+      const result = evaluateDirectionSignals(s);
+
+      const banner = document.getElementById("decisionBanner");
+      banner.className = `decision-banner decision-${result.decision}`;
+      banner.textContent = result.decision.replace(/_/g, " ");
+
+      document.getElementById("dispConf").textContent = `${(result.confidence * 100).toFixed(1)}%`;
+      document.getElementById("dispRationale").textContent = result.rationale;
+      document.getElementById("dispAction").textContent = result.action;
+    }
+
+    function onSliderChange() {
+      updateFromInputs();
+    }
+
+    // Initialize
+    loadScenario(0);
+    applyScenario();
+  </script>
+</body>
+</html>
