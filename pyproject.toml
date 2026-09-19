@@ -1,0 +1,18 @@
+[build-system]
+requires = ["setuptools>=77,<82"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "jev-gateway"
+version = "0.1.0"
+description = "Local OpenRouter-backed Jev judgement gateway and stdio MCP server"
+readme = "README.md"
+requires-python = ">=3.13,<3.14"
+dependencies = [
+    "httpx==0.28.1",
+    "mcp==2.2.0",
+    "pydantic==2.13.5",
+]
+
+[tool.setuptools]
+packages = ["src"]

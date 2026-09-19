@@ -1,151 +1,137 @@
-# Step-by-Step Setup Guide: Using Jev AI
+# Jev gateway setup guide
 
-This guide shows you how to implement and run **Jev AI** with **Claude Code**, **OpenAI Codex CLI**, and **standalone Python scripts**.
+## Supported environment
 
----
+The verified environment is Linux with Python 3.13 and OpenRouter only. Diagnostic locking requires POSIX facilities; Windows is unsupported. It uses the pinned runtime dependencies declared in `pyproject.toml`:
 
-## 1. Prerequisites & API Keys
-
-Jev can be accessed through two providers:
-
-### Option A: Official TypeSafe API
-1. Sign up / join the developer waitlist at [typesafe.ai](https://typesafe.ai).
-2. Generate an API key (`TYPESAFE_API_KEY`).
-
-### Option B: OpenRouter Alpha Decisions API (Immediate Access)
-If you do not yet have access to the direct TypeSafe early access program, OpenRouter serves the exact same model (`typesafe/jev-1.13`) via its dedicated decisions endpoint:
-1. Generate an API key at [openrouter.ai/keys](https://openrouter.ai/keys).
-2. Set `OPENROUTER_API_KEY`.
-
----
-
-## 2. Setting Up in Claude Code
-
-You have two options for Claude Code:
-
-### Route 1: MCP Server via `blakestone-x/jev-mcp` (Recommended for starting out)
-
-Add the MCP server directly using `uvx`:
-
-```bash
-claude mcp add --scope user jev \
-  -e TYPESAFE_API_KEY="your_typesafe_key_here" \
-  -- uvx --from git+https://github.com/blakestone-x/jev-mcp@v0.2.1 jev-mcp
-```
-
-*(Note: If you are using OpenRouter, set `-e TYPESAFE_BASE_URL="https://openrouter.ai/api/alpha" -e TYPESAFE_API_KEY="your_openrouter_key"`)*
-
-Verify in Claude Code:
-```bash
-claude
-```
-Inside the session, prompt Claude:
-> "Run `jev_health` to check connection, then use `jev_classify` to classify whether this repository is a CLI, web app, or library."
-
----
-
-### Route 2: `jevwire` Claude Code Plugin (Automatic Lifecyle Hooks)
-
-Brainwires provides a zero-config plugin for Claude Code that runs Jev checks automatically before risky tools run and after command outputs:
-
-```bash
-# Inside Claude Code
-/plugin marketplace add Brainwires/jevwire
-/plugin install jev@brainwires-jevwire
-/reload-plugins
-```
-
-Then export your key in the shell before launching Claude:
-```bash
-export TYPESAFE_API_KEY="your_typesafe_key_here"
-claude
-```
-
----
-
-## 3. Setting Up in OpenAI Codex CLI
-
-Codex CLI has native MCP support configured via `~/.codex/config.toml`.
-
-### Configure `~/.codex/config.toml`
-
-Open or edit `~/.codex/config.toml` and add:
-
-```toml
-[mcp_servers.jev]
-command = "uvx"
-args = [
-  "--from",
-  "git+https://github.com/blakestone-x/jev-mcp@v0.2.1",
-  "jev-mcp"
-]
-env = { TYPESAFE_API_KEY = "your_typesafe_key_here" }
-```
-
-Alternatively, if you prefer `npx` and `jevwire`:
-
-```toml
-[mcp_servers.jev]
-command = "npx"
-args = ["-y", "jevwire"]
-env = { TYPESAFE_API_KEY = "your_typesafe_key_here" }
-```
-
-### Testing in Codex
-
-Launch Codex:
-```bash
-codex
-```
-Type:
 ```text
-/mcp
+httpx==0.28.1
+mcp==2.2.0
+pydantic==2.13.5
 ```
-You will see `jev` listed as an active server with its tools (`jev_ask`, `jev_classify`, `jev_score`, `jev_check`, etc.).
 
----
+Create an isolated environment and install the local project:
 
-## 4. Setting Up Your Custom `check_direction` Advisory Supervisor
-
-This repository includes a pre-built MCP server implementing the **5-question anti-rabbit-hole supervisor**:
-
-### Registering in Claude Code:
 ```bash
-claude mcp add --scope user direction-guard \
-  -e TYPESAFE_API_KEY="your_key" \
-  -- /home/chris/data/projects-ongoing/jev/.venv/bin/python \
-     /home/chris/data/projects-ongoing/jev/src/mcp_server.py
+python3.13 -m venv .venv
+.venv/bin/python -m pip install .
 ```
 
-### Registering in Codex CLI (`~/.codex/config.toml`):
+Installation fetches packages and therefore needs network access. The project does not install dependencies itself. If the Python distribution created an environment without `pip`, provision `pip` through your normal Python-distribution process before running the installation command.
+
+Set the OpenRouter credential only in the environment of the process that uses the gateway. The runtime reads this variable when it creates the client; no `.env` file is read automatically:
+
+```bash
+export OPENROUTER_API_KEY='replace-with-your-key'
+```
+
+The gateway does not load `.env`, does not support `TYPESAFE_API_KEY`, and never silently chooses a native TypeSafe route. A native-only key produces a `configuration` error; if both variables are present, routing remains OpenRouter.
+
+## Start the MCP server
+
+```bash
+OPENROUTER_API_KEY='replace-with-your-key' .venv/bin/python src/server.py
+```
+
+MCP uses standard input and output, so do not add logging or shell banners to stdout. Configure your MCP host to launch the two absolute paths on its own machine, inheriting `OPENROUTER_API_KEY` from the host environment:
+
 ```toml
-[mcp_servers.direction_guard]
-command = "/home/chris/data/projects-ongoing/jev/.venv/bin/python"
-args = ["/home/chris/data/projects-ongoing/jev/src/mcp_server.py"]
-env = { TYPESAFE_API_KEY = "your_key" }
+[mcp_servers.jev_gateway]
+command = "/absolute/path/to/jev/.venv/bin/python"
+args = ["/absolute/path/to/jev/src/server.py"]
 ```
 
-### Prompting Astra / Sol / Claude Code to use it:
-> "Before exploring any detour or tangent away from the primary task, call `check_direction` with the main objective, your proposed investigation, and the evidence observed. Obey its recommendation."
+The five tool names are `jev_check`, `jev_classify`, `jev_score`, `jev_evaluate` and `jev_health`. They accept JSON-compatible string, object and list state. Successful calls return validated judgements; failures return `{"error": {"category": "…", "message": "…"}}`.
 
----
+`jev_health` is configuration-only unless its explicit verification option is supplied. Configuration-ready means a key and supported local configuration are present; it does not mean that OpenRouter has been contacted or is currently reachable.
 
-## 5. Local Python Sandbox (Testing Without an Agent)
+## Call the Python client
 
-This directory already includes a configured virtual environment (`.venv`) with `typesafe-sdk`.
+```python
+from src.gateway import JevGateway, JevGatewayError
 
-### 1. Set your environment variable:
+gateway = JevGateway(model="~typesafe/jev-latest")
+try:
+    result = gateway.evaluate(
+        state={"change": "remove a cache directory"},
+        questions={
+            "destructive": {
+                "type": "noul",
+                "instructions": "Does the change delete user data?",
+            }
+        },
+    )
+    print(result.answers)
+except JevGatewayError as error:
+    print(error.to_dict())
+```
+
+Use `check`, `choice` and `score` for one question. Input validation happens before a request is sent. The gateway rejects unsupported state, invalid or empty question definitions, non-finite numbers, oversized input, too many questions and malformed provider answers.
+
+The stable error categories are:
+
+| Category | Meaning |
+| --- | --- |
+| `input_validation` | Local request does not meet the contract. |
+| `configuration` | OpenRouter configuration is absent or unsupported. |
+| `authentication` | OpenRouter rejected credentials. |
+| `rate_limit` | OpenRouter limited the request. |
+| `timeout` | The bounded request deadline expired. |
+| `provider_failure` | A transport or provider failure prevented a judgement. |
+| `provider_response` | OpenRouter returned an invalid or incomplete judgement. |
+
+Treat an error as no Jev judgement. The consuming project decides whether to stop, retry through its own policy, or proceed using its own judgement; that fallback is never a Jev approval.
+
+## Limits, retries and diagnostics
+
+The default total deadline is 20 seconds. It covers queueing, each attempt and backoff. The base API enforces a 256 KiB request limit, a 256 KiB provider-response limit, at most 64 questions and at most 8 simultaneous requests.
+
+The gateway requests identity response encoding and rejects successful compressed responses before reading them. This keeps the 256 KiB response limit meaningful without decompressing an unbounded provider body locally.
+
+The gateway makes at most three attempts for transient 408, 429, 502, 503 and 504 responses, connection errors and transport timeouts. Backoff starts at 0.25 seconds and doubles, while respecting a provider retry hint only inside the shared 20-second deadline. Replaying an inference can incur another charge.
+
+Diagnostics are enabled by default in `$JEV_LOG_DIR` when set, otherwise in `~/.local/state/jev-gateway`. Records are private owner-only JSON files, each containing at most 64 KiB of JSON plus a newline, with a 20 MiB aggregate cap including newlines, 1,024-record cap and 24-hour retention. A record that exceeds its cap becomes a valid JSON record marked `"truncated": true`. Cleanup happens at server startup, before writes and every 60 seconds while running; an exited server removes expired records at its next start. Logging failures emit one sanitised stderr warning and do not replace a judgement.
+
+The standalone MCP server uses the defaults above. When embedding the Python gateway, configure its constructor:
+
+| Parameter | Default |
+| --- | --- |
+| `timeout_seconds` | `20.0` |
+| `max_attempts` | `3` |
+| `retry_backoff_seconds` | `0.25` |
+| `max_in_flight` | `8` (excess calls receive an immediate error) |
+| `max_questions` | `64` |
+| `request_limit_bytes` / `response_limit_bytes` | `262144` each |
+
+For example, `JevGateway(timeout_seconds=5, max_attempts=2)` uses a five-second inference budget and at most two attempts. Async applications use `aevaluate`, `acheck`, `achoice` and `ascore`; the synchronous wrappers cannot run inside an existing event loop.
+
+An optional `logger=DiagnosticLogger(...)` argument configures `log_dir`, `retention_seconds`, `max_total_bytes`, `max_record_bytes` and `max_segments`. Import that class from `src.diagnostics`. The gateway adds its configured key to the logger's automatic exclusions. Use the gateway as a context manager or call `close()` to stop its cleanup worker; embedded applications can call `gateway.logger.start()` explicitly for cleanup before their first request.
+
+Pass `logging_exclusions` as a list of RFC 6901 JSON Pointer strings rooted at the full diagnostic record: `/state`, `/answers`, or `/metadata`. For example, `/state/customer/token` excludes that nested field from the diagnostic copy. Use `~1` for `/` and `~0` for `~`; malformed pointers are rejected as input errors before inference.
+
+Before submitting state, remove credentials and anything you do not intend to send to OpenRouter. Logging exclusions affect only a diagnostic copy; they do not alter inference state. Automatic filtering is best effort, including for nested data and returned answers, and cannot guarantee that every secret is detected.
+
+## Examples and verification
+
+Both public examples make a live provider request only when `OPENROUTER_API_KEY` is present:
+
 ```bash
-cp .env.example .env
-# Edit .env and enter your TYPESAFE_API_KEY or OPENROUTER_API_KEY
+OPENROUTER_API_KEY='replace-with-your-key' .venv/bin/python examples/demo_openrouter_decisions.py
+OPENROUTER_API_KEY='replace-with-your-key' .venv/bin/python examples/coding_agent_eval.py
 ```
 
-### 2. Run the provided demo script:
+They report only sanitised structured gateway errors. They are not part of the offline test suite.
+
+Run offline verification with synthetic credentials and the test fake transport:
+
 ```bash
-# Using direct TypeSafe SDK:
-source .venv/bin/activate
-python examples/demo_typesafe_sdk.py
-
-# Or using OpenRouter Decisions API:
-python examples/demo_openrouter_decisions.py
+.venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m compileall -q src examples
+.venv/bin/python -c "from src.gateway import JevGateway; from src import server; print('imports ok')"
 ```
+
+No linter or type checker is declared or installed in this repository. Fresh-install verification remains unperformed because dependency installation was not authorised. A live smoke test is separate and requires an intentional credential-bearing, potentially chargeable provider request.
+
+## Legacy material
+
+`examples/demo_typesafe_sdk.py`, if present in a local historical checkout, and any TypeSafe instructions are legacy material outside the supported gateway contract. `prototypes/antirabbithole/` is also preserved as a separate prototype: it owns any supervisory policy and is not a gateway test or integration.
