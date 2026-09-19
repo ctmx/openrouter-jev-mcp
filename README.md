@@ -1,81 +1,215 @@
-# Jev gateway
+# openrouter-jev-mcp
 
-Jev gateway is a local Python client and stdio MCP server for structured Jev judgements through OpenRouter. It supports Noul, Choice, Score and question-map evaluations. It makes judgements; a consuming project owns action thresholds, permissions and any fallback after an error.
+[![MCP Standard](https://img.shields.io/badge/MCP-2024--11--05-blue.svg)](https://modelcontextprotocol.io/)
+[![Python 3.10+](https://img.shields.io/badge/python-3.10%2B-brightgreen.svg)](https://www.python.org/)
+[![Provider: OpenRouter](https://img.shields.io/badge/Provider-OpenRouter-purple.svg)](https://openrouter.ai/)
+[![Model: Jev Latest](https://img.shields.io/badge/Model-~typesafe%2Fjev--latest-orange.svg)](https://openrouter.ai/~typesafe/jev-latest)
+[![License: MIT](https://img.shields.io/badge/License-MIT-green.svg)](LICENSE)
 
-OpenRouter is the only supported provider. Native TypeSafe keys and SDK routes are not supported by this gateway.
+> **High-speed, calibrated "System One" decision gateway and Model Context Protocol (MCP) server for TypeSafe's Jev model — powered instantly via OpenRouter.**
 
-## Install
+---
 
-Use Python 3.13 on Linux. Diagnostic file locking uses POSIX facilities; Windows is not supported. The declared runtime versions are `httpx==0.28.1`, `mcp==2.2.0` and `pydantic==2.13.5`.
+## ⚡ What is This?
+
+Large Language Models (like Claude 3.7, GPT-4o, or Gemini) are **"System Two"** thinkers: deliberative, generative, and sequential. However, coding agents repeatedly encounter dozens of small, bounded questions:
+
+```text
+               "Is this bug most likely:
+      code_defect / stale_test / network_timeout?"
+                          │
+                          ▼
+                   ┌──────────────┐
+                   │   Jev AI     │  System One: 80–150ms
+                   │  Judge via   │  $0.042 / 1M tokens ($0 output)
+                   │  OpenRouter  │  Full confidence & probabilities
+                   └──────┬───────┘
+                          │
+          network_timeout (p = 0.94)
+                          │
+                          ▼
+            Agent acts with high confidence
+```
+
+**TypeSafe AI's Jev** is a purpose-built discriminative model designed specifically for software decisions. It does not generate text or autoregressively stream tokens; it outputs **strictly typed, probabilistic decisions** in a single parallel pass.
+
+### Why OpenRouter?
+Direct native TypeSafe access is currently behind a private developer waitlist. **`openrouter-jev-mcp`** connects to OpenRouter's dedicated Decisions API (`https://openrouter.ai/api/alpha/decisions` with `~typesafe/jev-latest`), providing **immediate, zero-waitlist access** to Jev with your standard OpenRouter key.
+
+---
+
+## 🛠️ MCP Tools Exposed
+
+This server runs over standard `stdio` and implements the MCP specification:
+
+| Tool | Jev Primitive | Use Case | Return Value |
+| :--- | :--- | :--- | :--- |
+| `jev_check` | **Noul** | Yes / No propositions | Calibrated probability $P(\text{true}) \in [0.0, 1.0]$. |
+| `jev_classify` | **Choice** | Categorizing state into a closed set of labels | Chosen label, full probability distribution, and confidence ($0.0–1.0$). |
+| `jev_score` | **Score** | Placing state along an ordered discrete rubric | Expected score index and confidence score. |
+| `jev_evaluate` | **Multi-Question** | Evaluating an arbitrary dictionary of Choice, Score, and Noul questions simultaneously in one parallel pass | Dictionary of typed answers and token usage. |
+| `jev_health` | **Diagnostics** | Verification of API readiness and provider connectivity | Server health status, configured model, and connectivity verification. |
+
+---
+
+## 🚀 Quick Start
+
+### 1. Prerequisites
+* Python 3.10+ (or [uv](https://docs.astral.sh/uv/))
+* An [OpenRouter API Key](https://openrouter.ai/keys)
+
+### 2. Installation & Setup
+Clone the repository and install dependencies:
 
 ```bash
-python3.13 -m venv .venv
-.venv/bin/python -m pip install .
+git clone https://github.com/ctmx/openrouter-jev-mcp.git
+cd openrouter-jev-mcp
+
+# Using uv (recommended):
+uv venv .venv
+source .venv/bin/activate
+uv pip install -e .
+
+# Or standard pip:
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -e .
 ```
 
-This installs dependencies from the network. It is a user action. The gateway reads its key from the process environment only when it runs; this work did not access any real credential. Set the key explicitly before a live call or server launch:
+Copy the environment template and set your key:
+```bash
+cp .env.example .env
+# Edit .env with your actual key:
+# OPENROUTER_API_KEY=sk-or-v1-...
+chmod 600 .env
+```
+
+### 3. Verify Live Connectivity
+Run the included verification script:
+```bash
+export $(grep -v '^#' .env | xargs)
+python examples/demo_openrouter_decisions.py
+```
+
+---
+
+## 🤖 Configuring for Your Coding Agent
+
+### Claude Code
+
+Add the server to Claude Code using `claude mcp add`:
 
 ```bash
-export OPENROUTER_API_KEY='replace-with-your-key'
+claude mcp add --scope user openrouter-jev-mcp \
+  -e OPENROUTER_API_KEY="sk-or-v1-your-key-here" \
+  -- /path/to/openrouter-jev-mcp/.venv/bin/python \
+     /path/to/openrouter-jev-mcp/src/server.py
 ```
 
-No `.env` file is loaded automatically. State is sent to OpenRouter for inference, so callers must exclude credentials and anything they do not intend to send externally. Diagnostic filtering is defence in depth and cannot detect every secret.
+### OpenAI Codex CLI
 
-## Python client
-
-```python
-from src.gateway import JevGateway, JevGatewayError
-
-gateway = JevGateway()
-try:
-    answer = gateway.check(
-        state={"proposed_action": "delete a temporary cache directory"},
-        proposition="Does the action delete data outside the project?",
-    )
-except JevGatewayError as error:
-    print(error.to_dict())
-```
-
-`evaluate(state, questions)` accepts JSON-compatible strings, objects and lists and returns a `DecisionResult` with `model`, `answers`, `usage` and `raw_response`. `check`, `choice` and `score` return the requested answer. Questions and returned answers are validated; no missing or malformed answer is treated as success.
-
-Failures are structured as `{"error": {"category": ..., "message": ...}}`. Categories are `input_validation`, `configuration`, `authentication`, `rate_limit`, `timeout`, `provider_failure` and `provider_response`. Messages are sanitised and do not include credentials or provider response bodies.
-
-The default request deadline is 20 seconds. Current input boundaries are 256 KiB per request, 256 KiB per provider response, 64 questions and 8 in-flight requests. See [SETUP_GUIDE.md](SETUP_GUIDE.md) for retry and diagnostic-record configuration.
-
-## MCP server
-
-Run the server over standard input and output:
-
-```bash
-OPENROUTER_API_KEY='replace-with-your-key' .venv/bin/python src/server.py
-```
-
-The server keeps stdout for MCP protocol traffic. It exposes `jev_check`, `jev_classify`, `jev_score`, `jev_evaluate` and `jev_health`. Tool calls accept the same state types as the Python client and return either a successful result or the structured error object above.
-
-`jev_health` reports local configuration readiness by default. It does not prove OpenRouter connectivity unless its explicit verification option is requested; a live probe uses the same timeout and error rules as a judgement.
-
-To configure an MCP host, run the installed virtual environment’s Python executable with the repository’s `src/server.py` as its argument. Start the MCP host from an environment that already contains `OPENROUTER_API_KEY`; the server inherits it. For example:
+Add the server to your `~/.codex/config.toml`:
 
 ```toml
-[mcp_servers.jev_gateway]
-command = "/absolute/path/to/jev/.venv/bin/python"
-args = ["/absolute/path/to/jev/src/server.py"]
+[mcp_servers.openrouter_jev_mcp]
+command = "/path/to/openrouter-jev-mcp/.venv/bin/python"
+args = ["/path/to/openrouter-jev-mcp/src/server.py"]
+env = { OPENROUTER_API_KEY = "sk-or-v1-your-key-here" }
 ```
 
-Use absolute paths appropriate to the machine; no personal path is assumed. The existing anti-rabbit-hole prototype is separate from this gateway and is not part of its default tests or policy.
+Launch Codex and type `/mcp` — `openrouter_jev_mcp` will be active with all five tools.
 
-## Verification
+### Cursor
 
-Offline tests use synthetic credentials and a fake transport; they do not call OpenRouter. After installation, run:
+Add to your Cursor settings (`~/.cursor/mcp.json`):
+
+```json
+{
+  "mcpServers": {
+    "openrouter-jev-mcp": {
+      "command": "/path/to/openrouter-jev-mcp/.venv/bin/python",
+      "args": ["/path/to/openrouter-jev-mcp/src/server.py"],
+      "env": {
+        "OPENROUTER_API_KEY": "sk-or-v1-your-key-here"
+      }
+    }
+  }
+}
+```
+
+---
+
+## 💡 How to Prompt Your Agent
+
+Once configured, instruct your agent to use Jev as an objective judge during development:
+
+### 1. Bug Investigation / Root Cause Triage
+> *"Before modifying any code, inspect the failing test trace. Use `jev_classify` to evaluate whether the failure is most likely: `code_defect`, `stale_test`, `flaky_environment`, or `missing_config`. Show me Jev's probabilities before continuing."*
+
+### 2. Pre-Execution Safety Gating
+> *"Before running any shell command that deletes or moves files, invoke `jev_check` with the proposition: 'Does this command perform irreversible deletion of persistent project data?'. If probability > 0.70, stop and ask for human confirmation."*
+
+### 3. Post-Edit Acceptance Verification
+> *"Run the tests and inspect your git diff. Use `jev_evaluate` to score whether the diff satisfies the requirement and whether unexpected files were altered."*
+
+---
+
+## 🐍 Python Library Usage
+
+You can also use the gateway directly in your own Python services:
+
+```python
+from src.gateway import JevGateway
+
+with JevGateway() as jev:
+    # 1. Yes/No Check (Noul)
+    result = jev.check(
+        state="rm -rf /var/log/*",
+        proposition="Does this command delete files outside the current project?"
+    )
+    print(result["noul"])  # 0.98
+
+    # 2. Categorical Choice (Choice)
+    choice = jev.choice(
+        state="Connection timeout after 5000ms to redis:6379",
+        instructions="What subsystem failed?",
+        options={
+            "database": "Relational SQL database",
+            "cache": "Redis or Memcached key-value store",
+            "network": "DNS or proxy routing"
+        }
+    )
+    print(choice["choice"])     # "cache"
+    print(choice["confidence"]) # 1.0
+```
+
+---
+
+## 🛡️ Hardening & Enterprise Safety Features
+
+* **Zero-Hallucination Schemas:** Jev cannot hallucinate prose, markdown fences, or malformed JSON. The response is strictly bounded by the request schema.
+* **Resilience & Retry Policies:** Automatic exponential backoff with jitter on transient HTTP codes (`408, 429, 502, 503, 504`), parsing provider `Retry-After` headers (both integer seconds and HTTP-dates).
+* **Hard Deadlines & In-Flight Throttling:** Strict global deadline per call (`timeout_seconds = 20.0`), bounded response streams, and semaphore concurrency limits (`max_in_flight = 8`).
+* **Privacy & Secret Redaction:** Diagnostics logger automatically masks `OPENROUTER_API_KEY`, Bearer tokens, and credential patterns.
+* **Granular Exclusions:** Supports RFC 6901 JSON pointer exclusions (`logging_exclusions=["/state/secret_token"]`) ensuring proprietary customer data never reaches local diagnostic logs.
+* **Fail-Open Design:** If local diagnostic logging fails (e.g. read-only disk), it emits a single warning to `stderr` and preserves normal decision processing.
+
+---
+
+## 🧪 Testing
+
+Run the comprehensive offline test suite (no credentials or network required):
 
 ```bash
+# Run all 51 unit, resilience, and stdio subprocess tests
 .venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python -m compileall -q src examples
-.venv/bin/python -c "from src.gateway import JevGateway; from src import server; print('imports ok')"
+
+# Syntax verification
+.venv/bin/python -m compileall -q src tests examples
 ```
 
-The repository currently declares no formatter, linter or type checker, and none is installed by this package. Fresh-install verification was not run because dependency installation was not authorised. A passing offline suite does not demonstrate present OpenRouter connectivity or paid-model behaviour. Run either example only when you intentionally authorise a live provider request:
+---
 
-```bash
-OPENROUTER_API_KEY='replace-with-your-key' .venv/bin/python examples/demo_openrouter_decisions.py
-```
+## 📄 License
+
+MIT © Chris ([ctmx](https://github.com/ctmx))

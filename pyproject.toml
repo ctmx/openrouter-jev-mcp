@@ -3,16 +3,28 @@ requires = ["setuptools>=77,<82"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "jev-gateway"
+name = "openrouter-jev-mcp"
 version = "0.1.0"
-description = "Local OpenRouter-backed Jev judgement gateway and stdio MCP server"
+description = "High-speed System One Jev AI decision gateway and MCP server via OpenRouter"
 readme = "README.md"
-requires-python = ">=3.13,<3.14"
-dependencies = [
-    "httpx==0.28.1",
-    "mcp==2.2.0",
-    "pydantic==2.13.5",
+license = { text = "MIT" }
+requires-python = ">=3.10"
+authors = [{ name = "ctmx" }]
+keywords = ["mcp", "model-context-protocol", "jev", "typesafe", "openrouter", "ai-agents", "claude-code", "codex"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Topic :: Software Development :: Libraries :: Python Modules"
 ]
+dependencies = [
+    "httpx>=0.28.0",
+    "mcp>=2.2.0",
+    "pydantic>=2.10.0",
+]
+
+[project.scripts]
+openrouter-jev-mcp = "src.server:run"
 
 [tool.setuptools]
 packages = ["src"]

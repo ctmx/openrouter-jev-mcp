@@ -1,5 +1,28 @@
+# Python virtual environments
 .venv/
+venv/
+ENV/
+env/
+
+# Secrets and local configurations
 .env
-__pycache__/
-*.pyc
+*.env.local
+
+# Internal agent scratch files and prototypes (kept locally)
+.scratch/
 scratch/
+prototypes/
+
+# Python bytecode and caches
+__pycache__/
+*.py[cod]
+*$py.class
+*.pytest_cache/
+.coverage
+htmlcov/
+dist/
+build/
+*.egg-info/
+
+# Local diagnostic log storage
+~/.local/state/jev-gateway/
