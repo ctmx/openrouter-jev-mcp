@@ -1,43 +1,101 @@
-# Jev AI Starter & Direction Guard Workspace
+# Jev AI Local Gateway & MCP Server
 
-This workspace contains research, integration recipes, and runnable implementations for **Jev AI** (TypeSafe AI's System One decision engine), featuring the **Anti-Rabbit-Hole Supervisor (`check_direction`)**.
+A standalone, local gateway and Model Context Protocol (MCP) server for **Jev AI** (TypeSafe AI's System One decision engine).
 
-## Quick Links
+This repository serves as the shared, central Jev integration layer for any agentic coding project (including Codex CLI, Claude Code, and Cursor).
 
-- [RESEARCH_JEV_AI.md](file:///home/chris/data/projects-ongoing/jev/RESEARCH_JEV_AI.md) - Deep architectural report, benchmarks, primitives, and MCP analysis.
-- [SETUP_GUIDE.md](file:///home/chris/data/projects-ongoing/jev/SETUP_GUIDE.md) - Step-by-step instructions for Claude Code, Codex CLI, and direct APIs.
-- [interactive_direction_demo.html](file:///home/chris/data/projects-ongoing/jev/examples/interactive_direction_demo.html) - Single-file interactive HTML prototype with guided walkthroughs and live slider controls.
-- [.env.example](file:///home/chris/data/projects-ongoing/jev/.env.example) - Environment variables template.
+---
 
-## Anti-Rabbit-Hole Direction Guard
+## 1. What This Gateway Provides
 
-When coding agents (Astra, Sol, Claude Code, Codex) explore complex tasks, they can get lost in deep, ungrounded tangents. Instead of asking one fuzzy question, the supervisor decomposes tangent evaluation into 5 narrow Jev signals:
-1. **Direct Relevance** (`Noul`): Does this address a stated requirement?
-2. **Blocking Dependency** (`Noul`): Does evidence show this blocks the primary objective?
-3. **Grounded Evidence** (`Score`): Is the concern supported by observed traces vs pure speculation?
-4. **Circular Reasoning** (`Noul`): Does this repeat a previously settled question without new data?
-5. **Bounded Stopping Check** (`Noul`): Is there a concrete observation that would end this detour?
+Instead of generating free-form text, Jev returns deterministic, typed probabilities in **~70–150 ms** for **$0.042 / million input tokens** ($0 output tokens).
 
-These signals are combined in deterministic code into three outcomes:
-* `CONTINUE`: Grounded and directly relevant / blocking.
-* `BOUNDED_PROBE`: Speculative or uncertain, but bounded (allows 1 inspection step).
-* `RETURN_TO_MAIN`: Disconnected, circular, or ungrounded speculation.
+This gateway exposes standard Jev primitives to your agents:
+* **`jev_check` (Noul):** Evaluates a yes/no proposition and returns a calibrated probability $P(\text{true}) \in [0.0, 1.0]$.
+* **`jev_classify` (Choice):** Categorizes state into one label from a closed set of options with confidence and full distribution.
+* **`jev_score` (Score):** Rates state along an ordered rubric (e.g. low/medium/critical).
+* **`jev_evaluate`:** Evaluates an arbitrary custom question map simultaneously.
+* **`jev_health`:** Verifies gateway connectivity and active model (`~typesafe/jev-latest`).
 
-## Running the Components
+---
 
-### 1. Interactive HTML Prototype
-Open [examples/interactive_direction_demo.html](file:///home/chris/data/projects-ongoing/jev/examples/interactive_direction_demo.html) directly in any browser.
+## 2. Quick Start
 
-### 2. Automated Test Suite
-Run the 4 canonical evaluation scenarios (rabbit hole, blocking dependency, 1-step probe, circular retread):
+The virtual environment `.venv` and your API key in `.env` are already configured and verified.
+
+### Run a Test Decision
 ```bash
-source .venv/bin/activate
-python examples/test_direction_cases.py
+source .venv/bin/activate && export $(grep -v '^#' .env | xargs)
+python examples/demo_openrouter_decisions.py
 ```
 
-### 3. Run as an MCP Server
-The server exposes the `check_direction` tool to any MCP client:
+### Run the MCP Server
 ```bash
-python src/mcp_server.py
+python src/server.py
 ```
-*(See [SETUP_GUIDE.md](file:///home/chris/data/projects-ongoing/jev/SETUP_GUIDE.md) for Claude Code and Codex CLI registration commands).*
+
+---
+
+## 3. Registering in OpenAI Codex CLI
+
+To make Jev's decision tools available inside Codex:
+
+Add the following block to your `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.jev_gateway]
+command = "/home/chris/data/projects-ongoing/jev/.venv/bin/python"
+args = ["/home/chris/data/projects-ongoing/jev/src/server.py"]
+env = { OPENROUTER_API_KEY = "your_openrouter_key" }
+```
+
+*(You can also load the key from `.env` directly).*
+
+Once added, launch Codex:
+```bash
+codex
+```
+Run `/mcp` inside Codex, and `jev_gateway` will be active with `jev_check`, `jev_classify`, `jev_score`, `jev_evaluate`, and `jev_health`.
+
+---
+
+## 4. Registering in Claude Code
+
+```bash
+claude mcp add --scope user jev-gateway \
+  -e OPENROUTER_API_KEY="your_openrouter_key" \
+  -- /home/chris/data/projects-ongoing/jev/.venv/bin/python \
+     /home/chris/data/projects-ongoing/jev/src/server.py
+```
+
+---
+
+## 5. Python Library Usage in Other Projects
+
+You can import and use `JevGateway` directly from Python:
+
+```python
+import sys
+sys.path.insert(0, "/home/chris/data/projects-ongoing/jev")
+
+from src.gateway import JevGateway
+
+jev = JevGateway()
+
+# Yes/No check
+result = jev.check(
+    state="rm -rf /var/log/*",
+    proposition="Does this command delete files outside the repository?"
+)
+print(result) # {'type': 'noul', 'noul': 0.98}
+```
+
+---
+
+## 6. Directory Structure
+
+* [`src/gateway.py`](file:///home/chris/data/projects-ongoing/jev/src/gateway.py) - Reusable Python client for OpenRouter Decisions & TypeSafe APIs.
+* [`src/server.py`](file:///home/chris/data/projects-ongoing/jev/src/server.py) - Fast, lightweight MCP server exposing Jev decision tools.
+* [`examples/`](file:///home/chris/data/projects-ongoing/jev/examples/) - Runnable standalone decision examples.
+* [`prototypes/antirabbithole/`](file:///home/chris/data/projects-ongoing/jev/prototypes/antirabbithole/) - Isolated prototypes and test cases for the 5-signal anti-rabbit-hole supervisor (to be migrated to `codex-antirabbithole`).
+* [`RESEARCH_JEV_AI.md`](file:///home/chris/data/projects-ongoing/jev/RESEARCH_JEV_AI.md) - Deep architectural and benchmark research report.
