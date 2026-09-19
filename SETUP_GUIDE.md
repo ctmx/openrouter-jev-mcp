@@ -64,6 +64,8 @@ try:
     print(result.answers)
 except JevGatewayError as error:
     print(error.to_dict())
+finally:
+    gateway.close()
 ```
 
 Use `check`, `choice` and `score` for one question. Input validation happens before a request is sent. The gateway rejects unsupported state, invalid or empty question definitions, non-finite numbers, oversized input, too many questions and malformed provider answers.
@@ -84,13 +86,13 @@ Treat an error as no Jev judgement. The consuming project decides whether to sto
 
 ## Limits, retries and diagnostics
 
-The default total deadline is 20 seconds. It covers queueing, each attempt and backoff. The base API enforces a 256 KiB request limit, a 256 KiB provider-response limit, at most 64 questions and at most 8 simultaneous requests.
+The default network deadline is 20 seconds. It covers attempts and backoff; input validation and local diagnostic work occur outside that budget. The base API enforces a 256 KiB request limit, a 256 KiB provider-response limit, at most 64 questions and at most 8 simultaneous requests per gateway instance. Excess requests fail immediately rather than queueing.
 
 The gateway requests identity response encoding and rejects successful compressed responses before reading them. This keeps the 256 KiB response limit meaningful without decompressing an unbounded provider body locally.
 
 The gateway makes at most three attempts for transient 408, 429, 502, 503 and 504 responses, connection errors and transport timeouts. Backoff starts at 0.25 seconds and doubles, while respecting a provider retry hint only inside the shared 20-second deadline. Replaying an inference can incur another charge.
 
-Diagnostics are enabled by default in `$JEV_LOG_DIR` when set, otherwise in `~/.local/state/jev-gateway`. Records are private owner-only JSON files, each containing at most 64 KiB of JSON plus a newline, with a 20 MiB aggregate cap including newlines, 1,024-record cap and 24-hour retention. A record that exceeds its cap becomes a valid JSON record marked `"truncated": true`. Cleanup happens at server startup, before writes and every 60 seconds while running; an exited server removes expired records at its next start. Logging failures emit one sanitised stderr warning and do not replace a judgement.
+Diagnostics are enabled by default in `$JEV_LOG_DIR` when set, otherwise in `~/.local/state/jev-gateway`. Successful calls record state, answers and metadata after exclusions and filtering; failed calls record outcome metadata. Records are private owner-only JSON files, each containing at most 64 KiB of JSON plus a newline, with a 20 MiB aggregate cap including newlines, 1,024-record cap and 24-hour retention. A record that exceeds its cap becomes a valid JSON record marked `"truncated": true`. Cleanup happens at server startup, before writes and every 60 seconds while running; an exited server removes expired records at its next start. Logging failures emit one sanitised stderr warning per logger and do not replace a judgement.
 
 The standalone MCP server uses the defaults above. When embedding the Python gateway, configure its constructor:
 
@@ -122,16 +124,21 @@ OPENROUTER_API_KEY='replace-with-your-key' .venv/bin/python examples/coding_agen
 
 They report only sanitised structured gateway errors. They are not part of the offline test suite.
 
-Run offline verification with synthetic credentials and the test fake transport:
+Run offline verification with real provider credentials removed and temporary diagnostic storage. The tests supply synthetic credentials and fake transports:
 
 ```bash
-.venv/bin/python -m unittest discover -s tests -v
-.venv/bin/python -m compileall -q src examples
-.venv/bin/python -c "from src.gateway import JevGateway; from src import server; print('imports ok')"
+test_logs=$(mktemp -d)
+env -u OPENROUTER_API_KEY -u TYPESAFE_API_KEY JEV_LOG_DIR="$test_logs" \
+  .venv/bin/python -m unittest discover -s tests -v
+.venv/bin/python -m compileall -q src tests examples
 ```
 
-No linter or type checker is declared or installed in this repository. Fresh-install verification remains unperformed because dependency installation was not authorised. A live smoke test is separate and requires an intentional credential-bearing, potentially chargeable provider request.
+No linter or type checker is declared in this repository. A live smoke test is separate and requires an intentional credential-bearing, potentially chargeable provider request. Offline verification does not establish current compatibility with OpenRouter's alpha endpoint.
+
+Some restricted execution sandboxes stall even a trivial `anyio.to_thread.run_sync` call, preventing MCP stdio initialisation. If this occurs, repeat the credential-free offline suite in a normal local environment; do not change the production transport to bypass the sandbox.
 
 ## Legacy material
 
-`examples/demo_typesafe_sdk.py`, if present in a local historical checkout, and any TypeSafe instructions are legacy material outside the supported gateway contract. `prototypes/antirabbithole/` is also preserved as a separate prototype: it owns any supervisory policy and is not a gateway test or integration.
+`examples/demo_typesafe_sdk.py` is a historical native-SDK experiment outside the supported gateway contract. Its optional `typesafe_sdk` dependency is not installed by this package, and its API compatibility is not covered by the offline tests. Use the two OpenRouter examples above for this project.
+
+Earlier prototypes and internal hardening notes were removed from the current tree but remain in Git history. `.gitignore` prevents future accidental additions; it does not remove already committed material from history.

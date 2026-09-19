@@ -6,7 +6,10 @@ env/
 
 # Secrets and local configurations
 .env
+.env.*
+*.env
 *.env.local
+!.env.example
 
 # Internal agent scratch files and prototypes (kept locally)
 .scratch/
@@ -24,5 +27,5 @@ dist/
 build/
 *.egg-info/
 
-# Local diagnostic log storage
-~/.local/state/jev-gateway/
+# Diagnostic segments if JEV_LOG_DIR is placed inside the checkout
+record-*.jsonl

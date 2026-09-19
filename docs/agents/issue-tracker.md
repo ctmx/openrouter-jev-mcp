@@ -1,8 +1,8 @@
 # Issue tracker: Local Markdown
 
-Specs and tickets live in `.scratch/<feature-slug>/` and are versioned with the project.
-The owner requested unattended setup through implementation on 2026-09-19. No remote is
-configured, so local Markdown is the reversible setup default; no remote publication is authorised.
+Local specs and tickets live in `.scratch/<feature-slug>/`, which is ignored by Git.
+Create them when work needs a durable specification or spans multiple sessions.
+For small changes, use the owner's request and report the result directly.
 
 - Spec: `.scratch/<feature-slug>/spec.md`.
 - Tickets: one file per ticket at `.scratch/<feature-slug>/issues/<NN>-<slug>.md`.
@@ -11,7 +11,5 @@ configured, so local Markdown is the reversible setup default; no remote publica
 - Start only tickets whose blockers are complete and whose execution route is authorised.
 - Record completion evidence and mark a ticket `done` only after its acceptance criteria pass.
 - Append discussion under `Comments`; keep any execution blocker distinct from specification readiness.
-- Publishing means writing these local files. Do not create remote issues or change a parent issue.
-
-The current feature is `jev-gateway-hardening`. Its `progress.md` records execution state and
-the outstanding delegation capability blocker; it is not independent verification evidence.
+- Creating or updating local tickets does not authorise remote issues, pushes or publication.
+  Use the owner's current instructions to determine which remote actions are authorised.

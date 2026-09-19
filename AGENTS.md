@@ -26,7 +26,8 @@ Run `.venv/bin/python -m unittest discover -s tests -v` for the offline suite; u
 such as `tests.test_resilience` for focused verification. Compile with
 `.venv/bin/python -m compileall -q src tests examples`. No linter or type checker is installed.
 Use an isolated test environment with synthetic credentials and temporary diagnostic logs.
-Follow the hardening spec's public API and stdio MCP test boundaries; live examples are not tests.
+Verify gateway behaviour through its public API and MCP behaviour through the standard stdio
+transport; live examples are not tests. See `SETUP_GUIDE.md` for the supported contract.
 
 The workspace sandbox can stall even `anyio.to_thread.run_sync(lambda: 1)`. If stdio tests
 hang there, use an approved credential-free offline run outside that sandbox; retain the standard
