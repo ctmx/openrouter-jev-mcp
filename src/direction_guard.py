@@ -204,10 +204,14 @@ class DirectionGuard:
             import httpx
             url = "https://openrouter.ai/api/alpha/decisions"
             headers = {"Authorization": f"Bearer {self.openrouter_api_key}", "Content-Type": "application/json"}
+            questions_dict = {
+                k: (v.model_dump(exclude_none=True) if hasattr(v, "model_dump") else v)
+                for k, v in self.build_questions().items()
+            }
             payload = {
-                "model": "typesafe/jev-1.13",
+                "model": "~typesafe/jev-latest",
                 "state": state,
-                "questions": self.build_questions()
+                "questions": questions_dict
             }
             res = httpx.post(url, headers=headers, json=payload, timeout=15.0)
             res.raise_for_status()

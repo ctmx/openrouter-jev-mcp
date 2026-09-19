@@ -26,7 +26,7 @@ def main():
     }
 
     payload = {
-        "model": "typesafe/jev-1.13",
+        "model": "~typesafe/jev-latest",
         "state": {
             "error_log": "ConnectionError: HTTPSConnectionPool(host='api.internal', port=443): Max retries exceeded with url /v1/auth (Caused by NewConnectionError('<urllib3.connection.HTTPSConnection object>: Failed to establish a new connection: [Errno 111] Connection refused'))",
             "environment": "staging-cluster-04",
