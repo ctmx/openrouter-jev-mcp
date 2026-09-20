@@ -110,6 +110,12 @@ Replace the absolute paths and placeholder keys below. Keep credential-bearing s
 Add the server to Claude Code using `claude mcp add`:
 
 ```bash
+# Option A: Zero-clone via uvx (recommended)
+claude mcp add --scope user openrouter-jev-mcp \
+  -e OPENROUTER_API_KEY="sk-or-v1-your-key-here" \
+  -- uvx --from git+https://github.com/ctmx/openrouter-jev-mcp openrouter-jev-mcp
+
+# Option B: From a local clone
 claude mcp add --scope user openrouter-jev-mcp \
   -e OPENROUTER_API_KEY="sk-or-v1-your-key-here" \
   -- /path/to/openrouter-jev-mcp/.venv/bin/python \
@@ -121,10 +127,17 @@ claude mcp add --scope user openrouter-jev-mcp \
 Add the server to your `~/.codex/config.toml`:
 
 ```toml
+# Option A: Zero-clone via uvx
 [mcp_servers.openrouter_jev_mcp]
-command = "/path/to/openrouter-jev-mcp/.venv/bin/python"
-args = ["/path/to/openrouter-jev-mcp/src/server.py"]
+command = "uvx"
+args = ["--from", "git+https://github.com/ctmx/openrouter-jev-mcp", "openrouter-jev-mcp"]
 env = { OPENROUTER_API_KEY = "sk-or-v1-your-key-here" }
+
+# Option B: From a local clone
+# [mcp_servers.openrouter_jev_mcp]
+# command = "/path/to/openrouter-jev-mcp/.venv/bin/python"
+# args = ["/path/to/openrouter-jev-mcp/src/server.py"]
+# env = { OPENROUTER_API_KEY = "sk-or-v1-your-key-here" }
 ```
 
 Launch Codex and use `/mcp` to check that the server starts and exposes all five tools. Tool discovery does not verify provider connectivity.
@@ -137,8 +150,8 @@ Add to your Cursor settings (`~/.cursor/mcp.json`):
 {
   "mcpServers": {
     "openrouter-jev-mcp": {
-      "command": "/path/to/openrouter-jev-mcp/.venv/bin/python",
-      "args": ["/path/to/openrouter-jev-mcp/src/server.py"],
+      "command": "uvx",
+      "args": ["--from", "git+https://github.com/ctmx/openrouter-jev-mcp", "openrouter-jev-mcp"],
       "env": {
         "OPENROUTER_API_KEY": "sk-or-v1-your-key-here"
       }
@@ -146,6 +159,7 @@ Add to your Cursor settings (`~/.cursor/mcp.json`):
   }
 }
 ```
+*(Or use `command: "/path/to/.../.venv/bin/python"` and `args: ["/path/to/.../src/server.py"]` for a local clone).*
 
 ---
 
